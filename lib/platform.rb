@@ -36,16 +36,14 @@ end
 
 class FacetResponse
   attr_accessor :solr_response
-  def initialize(response, solr_response=nil)
+  def initialize(response, solr_response=SelectResponse.new)
     @namespaces = {'facet'=>'http://schemas.talis.com/2007/facet-results#'}
-    @solr_response = solr_response if solr_response
+    @solr_response = solr_response
     parse_response(response.body.content)
   end 
   
   def parse_response(doc)
-    @solr_response = SelectResponse.new unless @solr_response
-
-    @solr_response.facets = {'facet_fields' => {}}
+    @solr_response.facets ||= {'facet_fields' => {}}
 
     facets = Nokogiri::XML.parse(doc)
     facets.xpath('//facet:fields/facet:field', @namespaces).each do | facet |
@@ -58,4 +56,32 @@ class FacetResponse
       end
     end
   end 
+end
+
+class DescribeResponse
+  attr_accessor :solr_response
+  def initialize(response, solr_response=SelectResponse.new)
+    @namespaces = {'rdf'=>'http://www.w3.org/1999/02/22-rdf-syntax-ns#'}
+    @solr_response = solr_response
+    if response.header.status_code == 200
+      @solr_response.total_results = 1
+      @solr_response.results_per_page = 1
+      parse_response(response.body.content)
+    else 
+      @solr_response.total_results = 0      
+    end
+  end  
+  def parse_response(doc)    
+    describe = Nokogiri::XML.parse(doc)
+    describe.xpath('/rdf:RDF/rdf:Description', @namespaces).each do | resource |
+      r = RDFResource.new(resource['about'])
+      r.set_rdfxml(describe.to_xml)
+      resource.children.each do | child |
+        next unless child.is_a?(Nokogiri::XML::Element) && child.inner_text && !child['resource']
+        predicate = "#{child.namespace.href}#{child.name}"
+        r.assert(predicate, child.inner_text)
+      end
+      @solr_response.results << r
+    end
+  end     
 end

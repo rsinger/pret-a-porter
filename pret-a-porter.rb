@@ -27,18 +27,23 @@ get '/:store/select' do
   if params['sort']
     opts['sort'] = params['sort']
   end
-  search_response = STORES[params["store"]][:connection].search(query_string, opts)
   
-  response = SearchResponse.new(search_response)
+  response = case params['qt'] 
+    when 'document' then DescribeResponse.new(STORES[params["store"]][:connection].describe(params[:id]))
+    else SearchResponse.new(STORES[params["store"]][:connection].search(query_string, opts))
+  end
+  
+  
   if params["facet"] == "true"
-    facets = []
+    response.solr_response.facets ||= {}
+    response.solr_response.facets['facet_fields'] ||={}
     for var in request.query_string.split("&")
       f,v = var.split('=')
       if f == 'facet.field'
-        facets << v
+        response.solr_response.facets['facet_fields'][v] = []
       end
     end
-    facet_response = STORES[params["store"]][:connection].facet(query_string, facets, {'output'=>'xml'})
+    facet_response = STORES[params["store"]][:connection].facet(query_string, response.solr_response.facets['facet_fields'].keys, {'output'=>'xml'})
     FacetResponse.new(facet_response, response.solr_response)
   end
   response.solr_response.send("to_#{params["wt"]}")
@@ -86,7 +91,7 @@ class SelectResponse
     
     if @facets
       response['responseHeader']['facet'] = 'true'
-      response['responseHeader']['facet.field'] = @facets['facet_fields'].keys
+      response['responseHeader']['facet.field'] = (@facets['facet_fields'].keys||[])
 
       response['facet_counts'] = {'facet_queries'=>{},'facet_fields'=>{}}
       @facets['facet_fields'].each do | field, values |
