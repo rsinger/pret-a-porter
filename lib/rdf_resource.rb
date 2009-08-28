@@ -140,10 +140,18 @@ class RDFResource
       if ivar_val.is_a?(Array)
         response["#{@namespaces[idx.to_i]}#{tag}"] = []
         ivar_val.each do | iv |
-          response["#{@namespaces[idx.to_i]}#{tag}"] << iv
+          if iv.is_a?(RDFResource)
+            response["#{@namespaces[idx.to_i]}#{tag}"] << iv.uri
+          else
+            response["#{@namespaces[idx.to_i]}#{tag}"] << iv
+          end
         end    
       else
-        response["#{@namespaces[idx.to_i]}#{tag}"] = ivar_val
+        if ivar_val.is_a?(RDFResource)
+          response["#{@namespaces[idx.to_i]}#{tag}"] = ivar_val.uri
+        else
+          response["#{@namespaces[idx.to_i]}#{tag}"] = ivar_val
+        end
       end    
     end
     response

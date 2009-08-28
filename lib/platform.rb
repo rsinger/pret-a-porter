@@ -24,10 +24,19 @@ class SearchResponse
       c.name='rdf:Description'
       rdf.add_child(c)
       i.set_rdfxml(rdf.to_xml)
-      item.children.each do | child |
-        next unless child.inner_text
+      item.children.each do | child |        
+        next unless child.is_a?(Nokogiri::XML::Element)
         predicate = "#{child.namespace.href}#{child.name}"
-        i.assert(predicate, child.inner_text)
+        if child.inner_text && !child.inner_text.empty?
+          i.assert(predicate, child.inner_text)        
+        elsif !child.children.empty?
+          child.children.each do | grandchild |
+            next unless child.is_a?(Nokogiri::XML::Element)
+            if grandchild.name == "Description" && grandchild['about']
+              i.assert(predicate, RDFResource.new(grandchild['about']))
+            end
+          end
+        end
       end
       @solr_response.results << i
     end
@@ -77,9 +86,13 @@ class DescribeResponse
       r = RDFResource.new(resource['about'])
       r.set_rdfxml(describe.to_xml)
       resource.children.each do | child |
-        next unless child.is_a?(Nokogiri::XML::Element) && child.inner_text && !child['resource']
+        next unless child.is_a?(Nokogiri::XML::Element)
         predicate = "#{child.namespace.href}#{child.name}"
-        r.assert(predicate, child.inner_text)
+        if child.inner_text && !child.inner_text.empty?
+          r.assert(predicate, child.inner_text)
+        elsif child['resource']
+          r.assert(predicate, RDFResource.new(child['resource']))
+        end
       end
       @solr_response.results << r
     end

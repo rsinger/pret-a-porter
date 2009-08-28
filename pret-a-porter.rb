@@ -4,12 +4,14 @@ require 'pho'
 require 'nokogiri'
 require 'lib/platform'
 require 'lib/rdf_resource'
+require 'time'
 
 configure do
   STORES = {}
 end
 
 get '/:store/select' do
+  qtime = Time.now
   unless STORES[params["store"]]
     init_store(params["store"])
   end
@@ -46,6 +48,7 @@ get '/:store/select' do
     facet_response = STORES[params["store"]][:connection].facet(query_string, response.solr_response.facets['facet_fields'].keys, {'output'=>'xml'})
     FacetResponse.new(facet_response, response.solr_response)
   end
+  response.solr_response.qtime = ((Time.now - qtime) * 1000).to_i
   response.solr_response.send("to_#{params["wt"]}")
 end
 
@@ -56,7 +59,7 @@ end
 
 
 class SelectResponse
-  attr_accessor :total_results, :start_index, :results, :facets, :results_per_page
+  attr_accessor :total_results, :start_index, :results, :facets, :results_per_page, :qtime
   def initialize
     @total_results = 0
     @start_index = 0    
@@ -82,7 +85,7 @@ class SelectResponse
   end
   
   def to_hash
-    response = {'responseHeader'=>{'status'=>0,'QTime'=>0, 'params'=>{'rows'=>(@results_per_page||0)}}}
+    response = {'responseHeader'=>{'status'=>0,'QTime'=>@qtime, 'params'=>{'rows'=>(@results_per_page||0)}}}
     response['responseHeader']['params']['spellcheck.q'] = ''
     response['response']={'numFound'=>@total_results, 'start'=>@start_index, 'maxScore'=> 1.0, 'docs'=>[]}
     @results.each do | result |
